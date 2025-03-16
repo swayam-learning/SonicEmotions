@@ -58,12 +58,11 @@ def connect_db(database=None):
             database=database if database else None,
             charset='utf8mb4',
             cursorclass=pymysql.cursors.DictCursor,
-            ssl={"ca": r"C:\Users\hp\OneDrive\codes\Project_SonicEmotions\streamlit_app\ca_cert\isrgrootx1.pem"}  # ✅ Use the actual path to your downloaded ca.pem
+            ssl={"ca": MYSQL_CA_CERT_PATH}  # Secure SSL connection
         )
     except pymysql.MySQLError as e:
-        st.error(f"Database Connection Error: {e}")
+        print(f"Database Connection Error: {e}")
         return None
-
 
 # Create or use existing subreddit database
 @st.cache_resource
