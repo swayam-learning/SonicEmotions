@@ -28,15 +28,20 @@ except Exception as e:
     st.stop()
 
 # Load secrets from Streamlit Cloud
-api_key = st.secrets["API_KEY"]  # Ensure this is set in Streamlit secrets with your key
-reddit_client_id = st.secrets["reddit_client_id"]
-reddit_client_secret = st.secrets["reddit_client_secret"]
-reddit_user_agent = st.secrets["reddit_user_agent"]
+try:
+    api_key = st.secrets["API_KEY"]  # Your new Gemini 2.0 Flash API key
+    reddit_client_id = st.secrets["reddit_client_id"]
+    reddit_client_secret = st.secrets["reddit_client_secret"]
+    reddit_user_agent = st.secrets["reddit_user_agent"]
+except KeyError as e:
+    st.error(f"Missing secret: {e}. Check Streamlit Cloud secrets configuration.")
+    st.stop()
 
 if not all([api_key, reddit_client_id, reddit_client_secret, reddit_user_agent]):
     st.error("Missing secrets. Check Streamlit Cloud secrets configuration.")
     st.stop()
 
+# Updated API URL for Gemini 2.0 Flash
 API_URL = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}'
 
 # Initialize Reddit API client
@@ -269,36 +274,42 @@ def get_statistics(posts):
         'avg_post_length': df['body'].apply(len).mean()
     }
 
-# Gemini API response with enhanced debugging and timeout
+# Gemini API response with enhanced debugging
 def get_gemini_response(user_input, context):
+    st.write("DEBUG: Entering get_gemini_response")  # Debug entry
     headers = {'Content-Type': 'application/json'}
     prompt = f"Context: {context}\n\nQuestion: {user_input}\n\nAnswer clearly."
     data = {"contents": [{"parts": [{"text": prompt}]}]}
+    st.write("DEBUG: Sending request with prompt:", prompt[:100] + "...")  # Truncate for readability
     try:
-        # Add timeout to prevent hanging
         response = requests.post(API_URL, headers=headers, json=data, timeout=10)
-        st.write(f"API Request Status: {response.status_code}")  # Debug: Show status code
+        st.write("DEBUG: Response status code:", response.status_code)
         if response.status_code == 200:
             result = response.json()
-            st.write("API Response:", result)  # Debug: Show full response
-            return result['candidates'][0]['content']['parts'][0]['text']
+            st.write("DEBUG: Full API response:", result)
+            try:
+                text = result['candidates'][0]['content']['parts'][0]['text']
+                st.write("DEBUG: Extracted response text:", text[:100] + "...")
+                return text
+            except KeyError as e:
+                st.error(f"Parsing Error: {e} - Response format may have changed for Gemini 2.0 Flash")
+                return f"Error: Unable to parse response - {str(e)}"
         else:
-            st.error(f"API Returned Status {response.status_code}: {response.text}")
+            st.error(f"API Error: Status {response.status_code} - {response.text}")
             return f"Error: API returned status {response.status_code}"
     except requests.exceptions.Timeout:
         st.error("API request timed out after 10 seconds.")
-        return "Error: API request timed out."
+        return "Error: API timed out"
     except requests.exceptions.RequestException as e:
         st.error(f"API Request Failed: {e}")
         if hasattr(e, 'response') and e.response is not None:
-            st.write("Error Details:", e.response.text)
-        return f"Error: Failed to connect to Gemini API - {str(e)}"
-    except KeyError as e:
-        st.error(f"API Response Parsing Error: {e}")
-        return f"Error: Unexpected response format - {str(e)}"
+            st.write("DEBUG: Error response content:", e.response.text)
+        return f"Error: API request failed - {str(e)}"
     except Exception as e:
-        st.error(f"Unexpected Error in Gemini API Call: {e}")
+        st.error(f"Unexpected Error: {e}")
         return f"Error: {str(e)}"
+    finally:
+        st.write("DEBUG: Exiting get_gemini_response")  # Debug exit
 
 # Main app
 def main():
@@ -347,21 +358,25 @@ def main():
 
     viz_context = context_base + f"Current Visualization: {selected_viz}."
     if st.button("💬 Chat about this"):
+        st.write("DEBUG: Chat button clicked")  # Debug button
         with st.expander("Chat with Gemini", expanded=True):
-            chat_key = f"chat_history_{selected_viz}_{selected_subreddit}"
-            if chat_key not in st.session_state:
-                st.session_state[chat_key] = []
+            st.write("DEBUG: Expander opened")  # Debug expander
+            if 'chat_history' not in st.session_state:
+                st.session_state.chat_history = []
             user_input = st.chat_input(f"Ask about {selected_viz} in {selected_subreddit}")
             if user_input:
+                st.write("DEBUG: User input received:", user_input)  # Debug input
                 with st.spinner("Getting response from Gemini..."):
-                    st.session_state[chat_key].append({"role": "user", "text": user_input})
                     response = get_gemini_response(user_input, viz_context)
-                    st.session_state[chat_key].append({"role": "assistant", "text": response})
-                    # Force a rerun to ensure chat updates
-                    st.rerun()
-            for message in st.session_state[chat_key]:
-                with st.chat_message(message["role"]):
-                    st.write(message["text"])
+                    st.session_state.chat_history.append({"role": "user", "text": user_input})
+                    st.session_state.chat_history.append({"role": "assistant", "text": response})
+            if st.session_state.chat_history:
+                st.write("DEBUG: Displaying chat history")  # Debug chat display
+                for message in st.session_state.chat_history:
+                    with st.chat_message(message["role"]):
+                        st.write(message["text"])
+            else:
+                st.write("DEBUG: No chat history yet")  # Debug empty state
 
 if __name__ == "__main__":
     main()

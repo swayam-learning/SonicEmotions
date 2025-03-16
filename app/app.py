@@ -27,7 +27,7 @@ reddit_client_id = os.getenv('REDDIT_CLIENT_ID')
 reddit_client_secret = os.getenv('REDDIT_CLIENT_SECRET')
 reddit_user_agent = os.getenv('REDDIT_USER_AGENT')
 
-API_URL = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}'
+API_URL = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}'
 
 # Initialize Reddit API client
 reddit = praw.Reddit(
@@ -83,7 +83,7 @@ def create_subreddit_db(subreddit):
         conn.close()
 
 # Fetch posts from Reddit API for the last 120 days
-def fetch_subreddit_posts(subreddit, days_ago=120):
+def fetch_subreddit_posts(subreddit, days_ago=30):
     try:
         sub = reddit.subreddit(subreddit[2:])  # Remove 'r/' prefix
         posts = []
