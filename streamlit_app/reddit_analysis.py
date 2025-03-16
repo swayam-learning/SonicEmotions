@@ -37,7 +37,7 @@ if not all([api_key, reddit_client_id, reddit_client_secret, reddit_user_agent])
     st.error("Missing secrets. Check Streamlit Cloud secrets configuration.")
     st.stop()
 
-API_URL = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}'
+API_URL = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}'
 
 # Initialize Reddit API client
 try:
