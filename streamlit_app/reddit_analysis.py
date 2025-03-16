@@ -293,7 +293,7 @@ def main():
     st.title("Subreddit Analysis with Chatbot 🚀")
     st.write("Analyze subreddit posts over the last 120 days!")
 
-    subreddit_options = ['r/python', 'r/dataisbeautiful', 'r/technology', 'r/science']
+    subreddit_options = ['r/anxiety', 'r/depression', 'r/mentalhealth', 'r/suicide','r/stress','/rIndianStockMarket','r/NSEbets','r/wallstreetbets','r/investing']
     selected_subreddit = st.selectbox("Select Subreddit", subreddit_options)
 
     if 'current_subreddit' not in st.session_state or st.session_state['current_subreddit'] != selected_subreddit:
