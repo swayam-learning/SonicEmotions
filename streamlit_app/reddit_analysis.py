@@ -381,46 +381,42 @@ def main():
     st.image(visualizations[selected_viz], caption=f"{selected_viz} for {selected_subreddit}", use_container_width=True)
 
     viz_context = context_base + f"Current Visualization: {selected_viz}."
-    if st.button("💬 Chat about this"):
-        st.write("DEBUG: Chat button clicked")
-        with st.expander("Chat with Gemini", expanded=True):
-            st.write("DEBUG: Expander opened")
-            if 'chat_history' not in st.session_state:
-                st.session_state.chat_history = []
-            
-            # Chat input with debug
-            st.write("DEBUG: Before chat input")
-            user_input = st.chat_input(f"Ask about {selected_viz} in {selected_subreddit}")
-            st.write("DEBUG: After chat input, user_input is:", user_input)
-            
-            if user_input:
-                st.write("DEBUG: User input received:", user_input)
-                with st.spinner("Getting response from Gemini..."):
-                    response = get_gemini_response(user_input, viz_context)
-                    st.session_state.chat_history.append({"role": "user", "text": user_input})
-                    st.session_state.chat_history.append({"role": "assistant", "text": response})
-                    st.write("DEBUG: Response added:", response[:100] + "...")
-            
-            # Fallback text input with button
-            st.write("DEBUG: Fallback input method")
-            fallback_input = st.text_input("Type your question here (fallback):", key=f"fallback_{selected_viz}")
-            if st.button("Submit (fallback)", key=f"submit_{selected_viz}"):
-                if fallback_input:
-                    st.write("DEBUG: Fallback input received:", fallback_input)
-                    with st.spinner("Getting response from Gemini..."):
-                        response = get_gemini_response(fallback_input, viz_context)
-                        st.session_state.chat_history.append({"role": "user", "text": fallback_input})
-                        st.session_state.chat_history.append({"role": "assistant", "text": response})
-                        st.write("DEBUG: Fallback response added:", response[:100] + "...")
 
-            # Display chat history
-            if st.session_state.chat_history:
-                st.write("DEBUG: Displaying chat history")
-                for message in st.session_state.chat_history:
-                    with st.chat_message(message["role"]):
-                        st.write(message["text"])
-            else:
-                st.write("DEBUG: Chat history is empty")
+    # Simplified Chatbot Section
+    st.subheader("Chatbot")
+    st.write("DEBUG: Entering chatbot section")
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+
+    # Fallback input method only (removing st.chat_input for now)
+    user_input = st.text_input("Ask a question about the visualization:", key=f"chat_input_{selected_viz}")
+    st.write("DEBUG: User input value:", user_input)
+    if st.button("Submit Question", key=f"submit_{selected_viz}"):
+        st.write("DEBUG: Submit button clicked")
+        if user_input:
+            st.write("DEBUG: Processing input:", user_input)
+            with st.spinner("Getting response from Gemini..."):
+                response = get_gemini_response(user_input, viz_context)
+                st.session_state.chat_history.append({"role": "user", "text": user_input})
+                st.session_state.chat_history.append({"role": "assistant", "text": response})
+                st.write("DEBUG: Response received:", response[:100] + "...")
+        else:
+            st.write("DEBUG: No input provided")
+
+    # Display chat history
+    st.write("DEBUG: Checking chat history")
+    if st.session_state.chat_history:
+        st.write("DEBUG: Displaying chat history")
+        for message in st.session_state.chat_history:
+            with st.chat_message(message["role"]):
+                st.write(message["text"])
+    else:
+        st.write("DEBUG: Chat history is empty")
+
+    # Manual refresh button
+    if st.button("Refresh Chat"):
+        st.write("DEBUG: Refresh button clicked")
+        st.rerun()
 
 if __name__ == "__main__":
     main()
