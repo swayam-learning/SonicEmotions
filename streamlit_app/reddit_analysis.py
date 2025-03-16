@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
-import pymysql
-from db_config import MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD
+from db_config import get_db_connection  # Updated import
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from textblob import TextBlob
@@ -48,26 +47,10 @@ except Exception as e:
     st.error(f"Failed to initialize Reddit API client: {e}")
     st.stop()
 
-# Database connection
-def connect_db(database=None):
-    try:
-        return pymysql.connect(
-            host=MYSQL_HOST,
-            user=MYSQL_USER,
-            password=MYSQL_PASSWORD,
-            database=database if database else None,
-            charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor,
-            ssl={"ca": MYSQL_CA_CERT_PATH}  # Secure SSL connection
-        )
-    except pymysql.MySQLError as e:
-        print(f"Database Connection Error: {e}")
-        return None
-
 # Create or use existing subreddit database
 @st.cache_resource
 def create_subreddit_db(subreddit):
-    conn = connect_db()
+    conn = get_db_connection()  # Updated to use get_db_connection
     if not conn:
         return False
     try:
@@ -125,7 +108,7 @@ def fetch_subreddit_posts(subreddit, days_ago=120):
 # Store posts in the database
 def store_posts(subreddit, posts):
     db_name = f"reddit_{subreddit.replace('/', '_').lower()}"
-    conn = connect_db(db_name)
+    conn = get_db_connection(db_name)  # Updated to use get_db_connection
     if not conn:
         return
     try:
@@ -146,7 +129,7 @@ def store_posts(subreddit, posts):
 @st.cache_data
 def fetch_posts_from_db(subreddit, days_ago=120):
     db_name = f"reddit_{subreddit.replace('/', '_').lower()}"
-    conn = connect_db(db_name)
+    conn = get_db_connection(db_name)  # Updated to use get_db_connection
     if not conn:
         return []
     try:
