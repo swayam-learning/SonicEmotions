@@ -13,11 +13,9 @@ from wordcloud import WordCloud
 import streamlit as st
 import requests
 import os
-from dotenv import load_dotenv
 import praw
-import pickle
 
-# Set NLTK data path and download resources
+# Set NLTK data path for Streamlit Cloud
 nltk_data_path = os.path.join(os.getcwd(), "nltk_data")
 os.makedirs(nltk_data_path, exist_ok=True)
 nltk.data.path.append(nltk_data_path)
@@ -27,15 +25,14 @@ try:
 except Exception as e:
     st.error(f"Failed to download NLTK resources: {e}")
 
-# Load environment variables
-load_dotenv()
-api_key = os.getenv('API_KEY')
-reddit_client_id = os.getenv('REDDIT_CLIENT_ID')
-reddit_client_secret = os.getenv('REDDIT_CLIENT_SECRET')
-reddit_user_agent = os.getenv('REDDIT_USER_AGENT')
+# Load secrets from Streamlit Cloud
+api_key = st.secrets["API_KEY"]
+reddit_client_id = st.secrets["reddit_client_id"]
+reddit_client_secret = st.secrets["reddit_client_secret"]
+reddit_user_agent = st.secrets["reddit_user_agent"]
 
 if not all([api_key, reddit_client_id, reddit_client_secret, reddit_user_agent]):
-    st.error("Missing environment variables. Check your .env file.")
+    st.error("Missing secrets. Check Streamlit Cloud secrets configuration.")
     st.stop()
 
 API_URL = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}'
@@ -67,6 +64,7 @@ def connect_db(database=None):
         return None
 
 # Create or use existing subreddit database
+@st.cache_resource
 def create_subreddit_db(subreddit):
     conn = connect_db()
     if not conn:
@@ -74,7 +72,6 @@ def create_subreddit_db(subreddit):
     try:
         cursor = conn.cursor()
         db_name = f"reddit_{subreddit.replace('/', '_').lower()}"
-        # Check if database exists; create if it doesn’t
         cursor.execute(f"SHOW DATABASES LIKE '{db_name}'")
         if not cursor.fetchone():
             cursor.execute(f"CREATE DATABASE {db_name}")
@@ -98,14 +95,14 @@ def create_subreddit_db(subreddit):
         cursor.close()
         conn.close()
 
-# Fetch posts from Reddit API with caching
+# Fetch posts from Reddit with caching
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def fetch_subreddit_posts(subreddit, days_ago=120):
     try:
-        sub = reddit.subreddit(subreddit[2:])  # Remove 'r/' prefix
+        sub = reddit.subreddit(subreddit[2:])
         posts = []
         cutoff_time = datetime.now() - timedelta(days=days_ago)
-        for submission in sub.new(limit=500):  # Reduced limit for speed
+        for submission in sub.new(limit=500):
             created_time = datetime.fromtimestamp(submission.created_utc)
             if created_time >= cutoff_time:
                 posts.append({
@@ -118,7 +115,7 @@ def fetch_subreddit_posts(subreddit, days_ago=120):
                 })
             else:
                 break
-        st.info(f"Fetched {len(posts)} posts from {subreddit} within the last {days_ago} days.")
+        st.info(f"Fetched {len(posts)} posts from {subreddit}.")
         return posts
     except Exception as e:
         st.error(f"Error fetching posts from Reddit: {e}")
@@ -168,7 +165,7 @@ def fetch_posts_from_db(subreddit, days_ago=120):
         cursor.close()
         conn.close()
 
-# Sentiment analysis (optimized with caching)
+# Sentiment analysis
 @st.cache_data
 def analyze_sentiment_textblob(text):
     analysis = TextBlob(text)
@@ -193,7 +190,7 @@ def analyze_post_trends(posts):
 # Common topics analysis
 @st.cache_data
 def analyze_common_topics(posts, top_n=20):
-    stop_words = set(stopwords.words('english')).union({"like", "just", "feel", "feeling", "really", "i'm", "im", "don't", "dont"})
+    stop_words = set(stopwords.words('english')).union({"like", "just", "feel", "really", "i'm", "dont"})
     all_words = []
     for post in posts:
         text = f"{post['title']} {post['body']}".lower()
@@ -202,29 +199,27 @@ def analyze_common_topics(posts, top_n=20):
     word_counts = Counter(all_words)
     return word_counts.most_common(top_n), word_counts
 
-# Generate visualizations (optimized with caching)
+# Generate visualizations
 @st.cache_data
 def generate_visualizations(posts, trend_data, top_words, word_counts):
     visualizations = {}
-    plt.style.use('fast')  # Use a faster matplotlib style
+    plt.style.use('fast')
 
-    # Post Frequency
     plt.figure(figsize=(10, 5))
     plt.plot(trend_data['date'], trend_data['post_count'], marker='o')
-    plt.title('Post Frequency Over Time')
+    plt.title('Post Frequency')
     plt.xlabel('Date')
     plt.ylabel('Posts')
     plt.xticks(rotation=45)
     plt.tight_layout()
-    plt.savefig('post_frequency.png', dpi=100)  # Lower DPI for speed
+    plt.savefig('post_frequency.png', dpi=100)
     plt.close()
     visualizations['Post Frequency'] = 'post_frequency.png'
 
-    # Sentiment Trends
     plt.figure(figsize=(10, 5))
     plt.plot(trend_data['date'], trend_data['avg_sentiment'], marker='o', color='green')
     plt.axhline(y=0, color='r', linestyle='-', alpha=0.3)
-    plt.title('Average Sentiment Over Time')
+    plt.title('Sentiment Trends')
     plt.xlabel('Date')
     plt.ylabel('Sentiment Score')
     plt.xticks(rotation=45)
@@ -233,7 +228,6 @@ def generate_visualizations(posts, trend_data, top_words, word_counts):
     plt.close()
     visualizations['Sentiment Trends'] = 'sentiment_trends.png'
 
-    # Sentiment Distribution
     df = pd.DataFrame(posts)
     df['sentiment'] = df['body'].apply(lambda x: analyze_sentiment_textblob(x)['sentiment'])
     plt.figure(figsize=(8, 4))
@@ -248,18 +242,16 @@ def generate_visualizations(posts, trend_data, top_words, word_counts):
     plt.close()
     visualizations['Sentiment Distribution'] = 'sentiment_distribution.png'
 
-    # Word Frequency
     plt.figure(figsize=(10, 6))
     words, counts = zip(*top_words)
     plt.barh(list(reversed(words)), list(reversed(counts)))
-    plt.title('Top 20 Words')
+    plt.title('Top Words')
     plt.xlabel('Frequency')
     plt.tight_layout()
     plt.savefig('word_frequency.png', dpi=100)
     plt.close()
     visualizations['Word Frequency'] = 'word_frequency.png'
 
-    # Word Cloud
     wordcloud = WordCloud(width=800, height=400, background_color='white', max_words=50).generate_from_frequencies(dict(word_counts))
     plt.figure(figsize=(8, 4))
     plt.imshow(wordcloud, interpolation='bilinear')
@@ -287,7 +279,7 @@ def get_statistics(posts):
 # Gemini API response
 def get_gemini_response(user_input, context):
     headers = {'Content-Type': 'application/json'}
-    prompt = f"Context: {context}\n\nQuestion: {user_input}\n\nAnswer clearly and concisely."
+    prompt = f"Context: {context}\n\nQuestion: {user_input}\n\nAnswer clearly."
     data = {"contents": [{"parts": [{"text": prompt}]}]}
     try:
         response = requests.post(API_URL, headers=headers, json=data)
@@ -296,15 +288,14 @@ def get_gemini_response(user_input, context):
     except Exception as e:
         return f"Error: {e}"
 
-# Streamlit App
+# Main app
 def main():
     st.title("Subreddit Analysis with Chatbot 🚀")
     st.write("Analyze subreddit posts over the last 120 days!")
 
-    subreddit_options = ['r/anxiety', 'r/depression', 'r/mentalhealth', 'r/suicide','r/stress','/rIndianStockMarket','r/NSEbets','r/wallstreetbets','r/investing']
+    subreddit_options = ['r/python', 'r/dataisbeautiful', 'r/technology', 'r/science']
     selected_subreddit = st.selectbox("Select Subreddit", subreddit_options)
 
-    # Only fetch and store if subreddit changes or data isn’t cached
     if 'current_subreddit' not in st.session_state or st.session_state['current_subreddit'] != selected_subreddit:
         with st.spinner("Fetching and processing data..."):
             db_name = create_subreddit_db(selected_subreddit)
@@ -313,14 +304,13 @@ def main():
                 if posts:
                     store_posts(selected_subreddit, posts)
                 st.session_state['current_subreddit'] = selected_subreddit
-                st.cache_data.clear()  # Clear cache only on subreddit change
+                st.cache_data.clear()
 
     posts = fetch_posts_from_db(selected_subreddit)
     if not posts:
-        st.error(f"No posts found for {selected_subreddit} within the last 120 days.")
+        st.error(f"No posts found for {selected_subreddit}.")
         return
 
-    # Perform analysis with progress feedback
     with st.spinner("Analyzing data..."):
         trend_data = analyze_post_trends(posts)
         top_words, word_counts = analyze_common_topics(posts)
@@ -328,7 +318,7 @@ def main():
         stats = get_statistics(posts)
 
     context_base = (
-        f"Analysis of {stats['total_posts']} posts from {selected_subreddit} (last 120 days):\n"
+        f"Analysis of {stats['total_posts']} posts from {selected_subreddit}:\n"
         f"- Avg Upvotes: {stats['avg_upvotes']:.2f}\n"
         f"- Sentiment: {stats['sentiment_distribution']}\n"
         f"- Avg Polarity: {stats['avg_polarity']:.4f}\n"
@@ -340,20 +330,18 @@ def main():
     st.header(selected_viz)
     st.image(visualizations[selected_viz], caption=f"{selected_viz} for {selected_subreddit}", use_column_width=True)
 
-    viz_context = context_base + f"Current Visualization: {selected_viz}. Shows {selected_viz.lower()} for {selected_subreddit} over 120 days."
-
+    viz_context = context_base + f"Current Visualization: {selected_viz}."
     if st.button("💬 Chat about this"):
         with st.expander("Chat with Gemini", expanded=True):
-            if f"chat_history_{selected_viz}_{selected_subreddit}" not in st.session_state:
-                st.session_state[f"chat_history_{selected_viz}_{selected_subreddit}"] = []
-
+            chat_key = f"chat_history_{selected_viz}_{selected_subreddit}"
+            if chat_key not in st.session_state:
+                st.session_state[chat_key] = []
             user_input = st.chat_input(f"Ask about {selected_viz} in {selected_subreddit}")
             if user_input:
-                st.session_state[f"chat_history_{selected_viz}_{selected_subreddit}"].append({"role": "user", "text": user_input})
+                st.session_state[chat_key].append({"role": "user", "text": user_input})
                 response = get_gemini_response(user_input, viz_context)
-                st.session_state[f"chat_history_{selected_viz}_{selected_subreddit}"].append({"role": "assistant", "text": response})
-
-            for message in st.session_state[f"chat_history_{selected_viz}_{selected_subreddit}"]:
+                st.session_state[chat_key].append({"role": "assistant", "text": response})
+            for message in st.session_state[chat_key]:
                 with st.chat_message(message["role"]):
                     st.write(message["text"])
 

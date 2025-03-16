@@ -1,3 +1,4 @@
+# db_config.py
 import streamlit as st
 
 MYSQL_HOST = st.secrets["MYSQL_HOST"]
