@@ -277,29 +277,27 @@ def get_statistics(posts):
 # Gemini API response
 def get_gemini_response(user_input, context):
     headers = {'Content-Type': 'application/json'}
-    prompt = f"Context: {context}\n\nQuestion: {user_input}\n\nAnswer clearly."
+    prompt = f"Given this context: {context}\n\nUser question: {user_input}\n\nProvide a clear, concise explanation."
     data = {"contents": [{"parts": [{"text": prompt}]}]}
     try:
-        response = requests.post(API_URL, headers=headers, json=data, timeout=5)
-        if response.status_code == 200:
-            result = response.json()
-            return result['candidates'][0]['content']['parts'][0]['text']
-        else:
-            st.error(f"API Error: Status {response.status_code} - {response.text}")
-            return f"Error: API returned status {response.status_code}"
-    except requests.exceptions.Timeout:
-        st.error("API request timed out after 5 seconds.")
-        return "Error: API timed out"
+        # Increase timeout to 10 seconds and add retry logic
+        for attempt in range(3):  # Retry up to 3 times
+            try:
+                response = requests.post(API_URL, headers=headers, json=data, timeout=10)
+                response.raise_for_status()
+                return response.json()['candidates'][0]['content']['parts'][0]['text']
+            except requests.exceptions.Timeout:
+                if attempt < 2:  # Don't warn on last attempt
+                    st.warning(f"API timeout on attempt {attempt + 1}, retrying...")
+                continue
+        st.error("API timed out after 3 attempts. Please try again later.")
+        return "Error: API timed out after multiple attempts"
     except requests.exceptions.RequestException as e:
         st.error(f"API Request Failed: {e}")
         return f"Error: API request failed - {str(e)}"
-    except KeyError as e:
-        st.error(f"Parsing Error: {e}")
-        return f"Error: Unable to parse response - {str(e)}"
     except Exception as e:
         st.error(f"Unexpected Error: {e}")
         return f"Error: {str(e)}"
-
 # Main app
 def main():
     st.title("Subreddit Analysis with Chatbot 🚀")
