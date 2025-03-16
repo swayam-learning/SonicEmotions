@@ -334,7 +334,7 @@ def main():
     viz_options = list(visualizations.keys())
     selected_viz = st.selectbox("Select Visualization", viz_options)
     st.header(selected_viz)
-    st.image(visualizations[selected_viz], caption=f"{selected_viz} for {selected_subreddit}", use_column_width=True)
+    st.image(visualizations[selected_viz], caption=f"{selected_viz} for {selected_subreddit}", use_container_width=True)  # Updated to use_container_width
 
     viz_context = context_base + f"Current Visualization: {selected_viz}."
     if st.button("💬 Chat about this"):
