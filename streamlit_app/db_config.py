@@ -12,7 +12,7 @@ MYSQL_CA_CERT = st.secrets["MYSQL_CA_CERT"]  # Get certificate from secrets
 # Create a temporary file to store the certificate
 with tempfile.NamedTemporaryFile(delete=False, suffix=".pem") as temp_cert:
     temp_cert.write(MYSQL_CA_CERT.encode("utf-8"))
-    temp_cert_path = temp_cert.name  # Get the file path
+    temp_cert_path = temp_cert.name  # Define temp_cert_path here
 
 # Function to establish a secure MySQL connection using SSL
 def get_db_connection():
@@ -21,5 +21,5 @@ def get_db_connection():
         user=MYSQL_USER,
         password=MYSQL_PASSWORD,
         database=MYSQL_DATABASE,
-        ssl={"ca": temp_cert_path}  # Use the temporary certificate file
+        ssl={"ca": temp_cert_path}  # Use the correct temp_cert_path
     )
