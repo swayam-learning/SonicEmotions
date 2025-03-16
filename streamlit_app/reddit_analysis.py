@@ -29,7 +29,7 @@ except Exception as e:
 
 # Load secrets from Streamlit Cloud
 try:
-    api_key = st.secrets["API_KEY"]  # Your new Gemini 2.0 Flash API key
+    api_key = st.secrets["API_KEY"]
     reddit_client_id = st.secrets["reddit_client_id"]
     reddit_client_secret = st.secrets["reddit_client_secret"]
     reddit_user_agent = st.secrets["reddit_user_agent"]
@@ -274,29 +274,23 @@ def get_statistics(posts):
         'avg_post_length': df['body'].apply(len).mean()
     }
 
-# Gemini API response with exhaustive debugging
+# Gemini API response with debugging
 def get_gemini_response(user_input, context):
     st.write("DEBUG: Entering get_gemini_response")
     headers = {'Content-Type': 'application/json'}
     prompt = f"Context: {context}\n\nQuestion: {user_input}\n\nAnswer clearly."
     data = {"contents": [{"parts": [{"text": prompt}]}]}
-    st.write("DEBUG: API URL:", API_URL[:50] + "...")  # Truncate for safety
+    st.write("DEBUG: API URL:", API_URL[:50] + "...")
     st.write("DEBUG: Sending request with prompt:", prompt[:100] + "...")
     try:
-        response = requests.post(API_URL, headers=headers, json=data, timeout=5)  # Reduced timeout
+        response = requests.post(API_URL, headers=headers, json=data, timeout=5)
         st.write("DEBUG: Response status code:", response.status_code)
-        st.write("DEBUG: Response headers:", dict(response.headers))
         if response.status_code == 200:
             result = response.json()
             st.write("DEBUG: Full API response:", result)
-            try:
-                text = result['candidates'][0]['content']['parts'][0]['text']
-                st.write("DEBUG: Extracted response text:", text[:100] + "...")
-                return text
-            except KeyError as e:
-                st.error(f"Parsing Error: {e} - Check Gemini 2.0 Flash response format")
-                st.write("DEBUG: Raw response for debugging:", result)
-                return f"Error: Unable to parse response - {str(e)}"
+            text = result['candidates'][0]['content']['parts'][0]['text']
+            st.write("DEBUG: Extracted response text:", text[:100] + "...")
+            return text
         else:
             st.error(f"API Error: Status {response.status_code} - {response.text}")
             return f"Error: API returned status {response.status_code} - {response.text[:100]}..."
@@ -308,6 +302,9 @@ def get_gemini_response(user_input, context):
         if hasattr(e, 'response') and e.response is not None:
             st.write("DEBUG: Error response content:", e.response.text)
         return f"Error: API request failed - {str(e)}"
+    except KeyError as e:
+        st.error(f"Parsing Error: {e}")
+        return f"Error: Unable to parse response - {str(e)}"
     except Exception as e:
         st.error(f"Unexpected Error: {e}")
         return f"Error: {str(e)}"
@@ -385,19 +382,37 @@ def main():
 
     viz_context = context_base + f"Current Visualization: {selected_viz}."
     if st.button("💬 Chat about this"):
-        st.write("DEBUG: Chat button clicked")  # Visible outside expander
+        st.write("DEBUG: Chat button clicked")
         with st.expander("Chat with Gemini", expanded=True):
             st.write("DEBUG: Expander opened")
             if 'chat_history' not in st.session_state:
                 st.session_state.chat_history = []
+            
+            # Chat input with debug
+            st.write("DEBUG: Before chat input")
             user_input = st.chat_input(f"Ask about {selected_viz} in {selected_subreddit}")
+            st.write("DEBUG: After chat input, user_input is:", user_input)
+            
             if user_input:
-                st.write("DEBUG: User input received:", user_input)  # Visible outside spinner
+                st.write("DEBUG: User input received:", user_input)
                 with st.spinner("Getting response from Gemini..."):
                     response = get_gemini_response(user_input, viz_context)
                     st.session_state.chat_history.append({"role": "user", "text": user_input})
                     st.session_state.chat_history.append({"role": "assistant", "text": response})
-                    st.write("DEBUG: Response added to history:", response[:100] + "...")
+                    st.write("DEBUG: Response added:", response[:100] + "...")
+            
+            # Fallback text input with button
+            st.write("DEBUG: Fallback input method")
+            fallback_input = st.text_input("Type your question here (fallback):", key=f"fallback_{selected_viz}")
+            if st.button("Submit (fallback)", key=f"submit_{selected_viz}"):
+                if fallback_input:
+                    st.write("DEBUG: Fallback input received:", fallback_input)
+                    with st.spinner("Getting response from Gemini..."):
+                        response = get_gemini_response(fallback_input, viz_context)
+                        st.session_state.chat_history.append({"role": "user", "text": fallback_input})
+                        st.session_state.chat_history.append({"role": "assistant", "text": response})
+                        st.write("DEBUG: Fallback response added:", response[:100] + "...")
+
             # Display chat history
             if st.session_state.chat_history:
                 st.write("DEBUG: Displaying chat history")
