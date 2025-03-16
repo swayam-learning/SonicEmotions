@@ -28,7 +28,7 @@ except Exception as e:
     st.stop()
 
 # Load secrets from Streamlit Cloud
-api_key = st.secrets["API_KEY"]
+api_key = st.secrets["API_KEY"]  # Ensure this is set in Streamlit secrets with your key
 reddit_client_id = st.secrets["reddit_client_id"]
 reddit_client_secret = st.secrets["reddit_client_secret"]
 reddit_user_agent = st.secrets["reddit_user_agent"]
@@ -269,26 +269,35 @@ def get_statistics(posts):
         'avg_post_length': df['body'].apply(len).mean()
     }
 
-# Gemini API response with debugging
+# Gemini API response with enhanced debugging and timeout
 def get_gemini_response(user_input, context):
     headers = {'Content-Type': 'application/json'}
     prompt = f"Context: {context}\n\nQuestion: {user_input}\n\nAnswer clearly."
     data = {"contents": [{"parts": [{"text": prompt}]}]}
     try:
-        response = requests.post(API_URL, headers=headers, json=data)
-        response.raise_for_status()
-        result = response.json()
-        # Debug: Log the full response to check structure
-        st.write("API Response:", result)
-        return result['candidates'][0]['content']['parts'][0]['text']
+        # Add timeout to prevent hanging
+        response = requests.post(API_URL, headers=headers, json=data, timeout=10)
+        st.write(f"API Request Status: {response.status_code}")  # Debug: Show status code
+        if response.status_code == 200:
+            result = response.json()
+            st.write("API Response:", result)  # Debug: Show full response
+            return result['candidates'][0]['content']['parts'][0]['text']
+        else:
+            st.error(f"API Returned Status {response.status_code}: {response.text}")
+            return f"Error: API returned status {response.status_code}"
+    except requests.exceptions.Timeout:
+        st.error("API request timed out after 10 seconds.")
+        return "Error: API request timed out."
     except requests.exceptions.RequestException as e:
         st.error(f"API Request Failed: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            st.write("Error Details:", e.response.text)
         return f"Error: Failed to connect to Gemini API - {str(e)}"
     except KeyError as e:
         st.error(f"API Response Parsing Error: {e}")
-        return f"Error: Unexpected response format from Gemini API - {str(e)}"
+        return f"Error: Unexpected response format - {str(e)}"
     except Exception as e:
-        st.error(f"Unexpected Error: {e}")
+        st.error(f"Unexpected Error in Gemini API Call: {e}")
         return f"Error: {str(e)}"
 
 # Main app
@@ -334,7 +343,7 @@ def main():
     viz_options = list(visualizations.keys())
     selected_viz = st.selectbox("Select Visualization", viz_options)
     st.header(selected_viz)
-    st.image(visualizations[selected_viz], caption=f"{selected_viz} for {selected_subreddit}", use_container_width=True)  # Updated to use_container_width
+    st.image(visualizations[selected_viz], caption=f"{selected_viz} for {selected_subreddit}", use_container_width=True)
 
     viz_context = context_base + f"Current Visualization: {selected_viz}."
     if st.button("💬 Chat about this"):
@@ -348,6 +357,8 @@ def main():
                     st.session_state[chat_key].append({"role": "user", "text": user_input})
                     response = get_gemini_response(user_input, viz_context)
                     st.session_state[chat_key].append({"role": "assistant", "text": response})
+                    # Force a rerun to ensure chat updates
+                    st.rerun()
             for message in st.session_state[chat_key]:
                 with st.chat_message(message["role"]):
                     st.write(message["text"])
