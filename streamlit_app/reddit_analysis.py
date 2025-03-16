@@ -89,7 +89,7 @@ def create_subreddit_db(subreddit):
 
 # Fetch posts from Reddit with caching
 @st.cache_data(ttl=3600)
-def fetch_subreddit_posts(subreddit, days_ago=120):
+def fetch_subreddit_posts(subreddit, days_ago=60):
     try:
         sub = reddit.subreddit(subreddit[2:])
         posts = []
@@ -303,7 +303,7 @@ def get_gemini_response(user_input, context):
 # Main app
 def main():
     st.title("Subreddit Analysis with Chatbot 🚀")
-    st.write("Analyze subreddit posts over the last 120 days!")
+    st.write("Analyze subreddit posts over the last 60 days!")
 
     subreddit_options = ['r/anxiety', 'r/depression', 'r/mentalhealth', 'r/suicide', 'r/stress', '/rIndianStockMarket', 'r/NSEbets', 'r/wallstreetbets', 'r/investing']
     selected_subreddit = st.selectbox("Select Subreddit", subreddit_options)

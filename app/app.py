@@ -88,7 +88,6 @@ def fetch_subreddit_posts(subreddit, days_ago=30):
         sub = reddit.subreddit(subreddit[2:])  # Remove 'r/' prefix
         posts = []
         cutoff_time = datetime.now() - timedelta(days=days_ago)
-        # Fetch more posts to ensure coverage (up to 1000, Reddit's max per request)
         for submission in sub.new(limit=1000):  # Increased limit
             created_time = datetime.fromtimestamp(submission.created_utc)
             if created_time >= cutoff_time:
@@ -101,7 +100,7 @@ def fetch_subreddit_posts(subreddit, days_ago=30):
                     'subreddit': subreddit
                 })
             else:
-                break  # Stop if posts are older than 120 days
+                break  # Stop if posts are older than cutoff
         st.info(f"Fetched {len(posts)} posts from {subreddit} within the last {days_ago} days.")
         return posts
     except Exception as e:
@@ -283,10 +282,11 @@ def get_gemini_response(user_input, context):
     prompt = f"Given this context: {context}\n\nUser question: {user_input}\n\nProvide a clear, concise explanation."
     data = {"contents": [{"parts": [{"text": prompt}]}]}
     try:
-        response = requests.post(API_URL, headers=headers, json=data)
+        response = requests.post(API_URL, headers=headers, json=data, timeout=5)
         response.raise_for_status()
         return response.json()['candidates'][0]['content']['parts'][0]['text']
     except Exception as e:
+        st.error(f"Error: {e}")
         return f"Error: {e}"
 
 # Streamlit App
@@ -295,18 +295,16 @@ def main():
     st.write("Select a subreddit to analyze its posts over the last 120 days!")
 
     # List of subreddits for the dropdown
-    subreddit_options = ['r/anxiety', 'r/depression', 'r/mentalhealth', 'r/suicide','r/stress','/rIndianStockMarket','r/NSEbets','r/wallstreetbets','r/investing']
+    subreddit_options = ['r/anxiety', 'r/depression', 'r/mentalhealth', 'r/suicide', 'r/stress', '/rIndianStockMarket', 'r/NSEbets', 'r/wallstreetbets', 'r/investing']
     selected_subreddit = st.selectbox("Select Subreddit", subreddit_options)
 
     # Store selected subreddit in session state to detect changes
     if 'current_subreddit' not in st.session_state or st.session_state['current_subreddit'] != selected_subreddit:
-        # Drop previous database and create new one
         db_name = create_subreddit_db(selected_subreddit)
         if db_name:
             posts = fetch_subreddit_posts(selected_subreddit)
             store_posts(selected_subreddit, posts)
             st.session_state['current_subreddit'] = selected_subreddit
-            # Clear cache to force re-fetching
             st.cache_data.clear()
 
     # Fetch posts from the current subreddit's database
@@ -341,21 +339,23 @@ def main():
     # Specific context for the selected visualization
     viz_context = context_base + f"Current Visualization: {selected_viz}. This shows {selected_viz.lower()} for {selected_subreddit} over the last 120 days."
 
-    # Chatbot popup trigger
-    if st.button("💬 Chat about this visualization"):
-        with st.expander("Chat with Gemini", expanded=True):
-            if f"chat_history_{selected_viz}_{selected_subreddit}" not in st.session_state:
-                st.session_state[f"chat_history_{selected_viz}_{selected_subreddit}"] = []
+    # Chatbot section
+    st.subheader("Chatbot")
+    if f"chat_history_{selected_viz}_{selected_subreddit}" not in st.session_state:
+        st.session_state[f"chat_history_{selected_viz}_{selected_subreddit}"] = []
 
-            user_input = st.chat_input(f"Ask about {selected_viz} in {selected_subreddit}")
-            if user_input:
-                st.session_state[f"chat_history_{selected_viz}_{selected_subreddit}"].append({"role": "user", "text": user_input})
+    user_input = st.text_input(f"Ask about {selected_viz} in {selected_subreddit}", key=f"chat_input_{selected_viz}_{selected_subreddit}")
+    if st.button("Submit Question", key=f"submit_{selected_viz}_{selected_subreddit}"):
+        if user_input:
+            with st.spinner("Getting response from Gemini..."):
                 response = get_gemini_response(user_input, viz_context)
+                st.session_state[f"chat_history_{selected_viz}_{selected_subreddit}"].append({"role": "user", "text": user_input})
                 st.session_state[f"chat_history_{selected_viz}_{selected_subreddit}"].append({"role": "assistant", "text": response})
 
-            for message in st.session_state[f"chat_history_{selected_viz}_{selected_subreddit}"]:
-                with st.chat_message(message["role"]):
-                    st.write(message["text"])
+    if st.session_state[f"chat_history_{selected_viz}_{selected_subreddit}"]:
+        for message in st.session_state[f"chat_history_{selected_viz}_{selected_subreddit}"]:
+            with st.chat_message(message["role"]):
+                st.write(message["text"])
 
 if __name__ == "__main__":
     main()
