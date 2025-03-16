@@ -13,7 +13,7 @@ import streamlit as st
 import requests
 import os
 import praw
-import pymysql.cursors  # Import for DictCursor
+import pymysql.cursors
 
 # Set NLTK data path for Streamlit Cloud
 nltk_data_path = os.path.join(os.getcwd(), "nltk_data")
@@ -21,9 +21,11 @@ os.makedirs(nltk_data_path, exist_ok=True)
 nltk.data.path.append(nltk_data_path)
 try:
     nltk.download('punkt', download_dir=nltk_data_path, quiet=True)
+    nltk.download('punkt_tab', download_dir=nltk_data_path, quiet=True)  # Added punkt_tab
     nltk.download('stopwords', download_dir=nltk_data_path, quiet=True)
 except Exception as e:
     st.error(f"Failed to download NLTK resources: {e}")
+    st.stop()
 
 # Load secrets from Streamlit Cloud
 api_key = st.secrets["API_KEY"]
@@ -81,7 +83,7 @@ def create_subreddit_db(subreddit):
         conn.close()
 
 # Fetch posts from Reddit with caching
-@st.cache_data(ttl=3600)  # Cache for 1 hour
+@st.cache_data(ttl=3600)
 def fetch_subreddit_posts(subreddit, days_ago=120):
     try:
         sub = reddit.subreddit(subreddit[2:])
@@ -100,7 +102,6 @@ def fetch_subreddit_posts(subreddit, days_ago=120):
                 })
             else:
                 break
-        st.info(f"Fetched {len(posts)} posts from {subreddit}.")
         return posts
     except Exception as e:
         st.error(f"Error fetching posts from Reddit: {e}")
@@ -120,7 +121,6 @@ def store_posts(subreddit, posts):
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (post['id'], post['title'], post['body'], post['upvotes'], post['created_at'], post['subreddit']))
         conn.commit()
-        st.write(f"Stored {len(posts)} posts in {db_name}.")
     except pymysql.MySQLError as e:
         st.error(f"Error storing posts: {e}")
     finally:
@@ -136,7 +136,6 @@ def fetch_posts_from_db(subreddit, days_ago=120):
         st.error("Failed to connect to the database.")
         return []
     try:
-        # Use DictCursor to get rows as dictionaries
         cursor = conn.cursor(pymysql.cursors.DictCursor)
         query = """
         SELECT * FROM posts 
@@ -145,10 +144,6 @@ def fetch_posts_from_db(subreddit, days_ago=120):
         """
         cursor.execute(query, (days_ago,))
         posts = cursor.fetchall()
-        if posts:
-            st.write("Sample post from DB:", posts[0])  # Debug output
-        else:
-            st.write(f"No posts found in {db_name} for the last {days_ago} days.")
         return posts
     except pymysql.MySQLError as e:
         st.error(f"MySQL Error: {e}")
@@ -176,7 +171,7 @@ def analyze_post_trends(posts):
         return pd.DataFrame()
     df = pd.DataFrame(posts)
     if 'created_at' not in df.columns:
-        st.error("Data from database is missing 'created_at' column. Check database fetch logic.")
+        st.error("Data from database is missing 'created_at' column.")
         return pd.DataFrame()
     df['created_at'] = pd.to_datetime(df['created_at'])
     df['date'] = df['created_at'].dt.date
