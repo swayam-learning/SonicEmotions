@@ -274,33 +274,24 @@ def get_statistics(posts):
         'avg_post_length': df['body'].apply(len).mean()
     }
 
-# Gemini API response with debugging
+# Gemini API response
 def get_gemini_response(user_input, context):
-    st.write("DEBUG: Entering get_gemini_response")
     headers = {'Content-Type': 'application/json'}
     prompt = f"Context: {context}\n\nQuestion: {user_input}\n\nAnswer clearly."
     data = {"contents": [{"parts": [{"text": prompt}]}]}
-    st.write("DEBUG: API URL:", API_URL[:50] + "...")
-    st.write("DEBUG: Sending request with prompt:", prompt[:100] + "...")
     try:
         response = requests.post(API_URL, headers=headers, json=data, timeout=5)
-        st.write("DEBUG: Response status code:", response.status_code)
         if response.status_code == 200:
             result = response.json()
-            st.write("DEBUG: Full API response:", result)
-            text = result['candidates'][0]['content']['parts'][0]['text']
-            st.write("DEBUG: Extracted response text:", text[:100] + "...")
-            return text
+            return result['candidates'][0]['content']['parts'][0]['text']
         else:
             st.error(f"API Error: Status {response.status_code} - {response.text}")
-            return f"Error: API returned status {response.status_code} - {response.text[:100]}..."
+            return f"Error: API returned status {response.status_code}"
     except requests.exceptions.Timeout:
         st.error("API request timed out after 5 seconds.")
         return "Error: API timed out"
     except requests.exceptions.RequestException as e:
         st.error(f"API Request Failed: {e}")
-        if hasattr(e, 'response') and e.response is not None:
-            st.write("DEBUG: Error response content:", e.response.text)
         return f"Error: API request failed - {str(e)}"
     except KeyError as e:
         st.error(f"Parsing Error: {e}")
@@ -308,37 +299,11 @@ def get_gemini_response(user_input, context):
     except Exception as e:
         st.error(f"Unexpected Error: {e}")
         return f"Error: {str(e)}"
-    finally:
-        st.write("DEBUG: Exiting get_gemini_response")
-
-# Test API independently
-def test_gemini_api():
-    st.write("DEBUG: Testing Gemini API with dummy request")
-    headers = {'Content-Type': 'application/json'}
-    data = {"contents": [{"parts": [{"text": "Hello, test response please"}]}]}
-    try:
-        response = requests.post(API_URL, headers=headers, json=data, timeout=5)
-        st.write("DEBUG: Test response status code:", response.status_code)
-        if response.status_code == 200:
-            result = response.json()
-            st.write("DEBUG: Test API response:", result)
-            return "API test successful"
-        else:
-            st.write("DEBUG: Test failed with status:", response.status_code, response.text)
-            return "API test failed"
-    except Exception as e:
-        st.write("DEBUG: Test exception:", str(e))
-        return f"API test error: {str(e)}"
 
 # Main app
 def main():
     st.title("Subreddit Analysis with Chatbot 🚀")
     st.write("Analyze subreddit posts over the last 120 days!")
-
-    # Test API at startup
-    st.write("DEBUG: Running API test...")
-    api_test_result = test_gemini_api()
-    st.write("DEBUG: API test result:", api_test_result)
 
     subreddit_options = ['r/anxiety', 'r/depression', 'r/mentalhealth', 'r/suicide', 'r/stress', '/rIndianStockMarket', 'r/NSEbets', 'r/wallstreetbets', 'r/investing']
     selected_subreddit = st.selectbox("Select Subreddit", subreddit_options)
@@ -382,41 +347,23 @@ def main():
 
     viz_context = context_base + f"Current Visualization: {selected_viz}."
 
-    # Simplified Chatbot Section
+    # Chatbot Section
     st.subheader("Chatbot")
-    st.write("DEBUG: Entering chatbot section")
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
 
-    # Fallback input method only (removing st.chat_input for now)
     user_input = st.text_input("Ask a question about the visualization:", key=f"chat_input_{selected_viz}")
-    st.write("DEBUG: User input value:", user_input)
     if st.button("Submit Question", key=f"submit_{selected_viz}"):
-        st.write("DEBUG: Submit button clicked")
         if user_input:
-            st.write("DEBUG: Processing input:", user_input)
             with st.spinner("Getting response from Gemini..."):
                 response = get_gemini_response(user_input, viz_context)
                 st.session_state.chat_history.append({"role": "user", "text": user_input})
                 st.session_state.chat_history.append({"role": "assistant", "text": response})
-                st.write("DEBUG: Response received:", response[:100] + "...")
-        else:
-            st.write("DEBUG: No input provided")
 
-    # Display chat history
-    st.write("DEBUG: Checking chat history")
     if st.session_state.chat_history:
-        st.write("DEBUG: Displaying chat history")
         for message in st.session_state.chat_history:
             with st.chat_message(message["role"]):
                 st.write(message["text"])
-    else:
-        st.write("DEBUG: Chat history is empty")
-
-    # Manual refresh button
-    if st.button("Refresh Chat"):
-        st.write("DEBUG: Refresh button clicked")
-        st.rerun()
 
 if __name__ == "__main__":
     main()
