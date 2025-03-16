@@ -21,7 +21,7 @@ os.makedirs(nltk_data_path, exist_ok=True)
 nltk.data.path.append(nltk_data_path)
 try:
     nltk.download('punkt', download_dir=nltk_data_path, quiet=True)
-    nltk.download('punkt_tab', download_dir=nltk_data_path, quiet=True)  # Added punkt_tab
+    nltk.download('punkt_tab', download_dir=nltk_data_path, quiet=True)
     nltk.download('stopwords', download_dir=nltk_data_path, quiet=True)
 except Exception as e:
     st.error(f"Failed to download NLTK resources: {e}")
@@ -269,7 +269,7 @@ def get_statistics(posts):
         'avg_post_length': df['body'].apply(len).mean()
     }
 
-# Gemini API response
+# Gemini API response with debugging
 def get_gemini_response(user_input, context):
     headers = {'Content-Type': 'application/json'}
     prompt = f"Context: {context}\n\nQuestion: {user_input}\n\nAnswer clearly."
@@ -277,9 +277,19 @@ def get_gemini_response(user_input, context):
     try:
         response = requests.post(API_URL, headers=headers, json=data)
         response.raise_for_status()
-        return response.json()['candidates'][0]['content']['parts'][0]['text']
+        result = response.json()
+        # Debug: Log the full response to check structure
+        st.write("API Response:", result)
+        return result['candidates'][0]['content']['parts'][0]['text']
+    except requests.exceptions.RequestException as e:
+        st.error(f"API Request Failed: {e}")
+        return f"Error: Failed to connect to Gemini API - {str(e)}"
+    except KeyError as e:
+        st.error(f"API Response Parsing Error: {e}")
+        return f"Error: Unexpected response format from Gemini API - {str(e)}"
     except Exception as e:
-        return f"Error: {e}"
+        st.error(f"Unexpected Error: {e}")
+        return f"Error: {str(e)}"
 
 # Main app
 def main():
@@ -334,9 +344,10 @@ def main():
                 st.session_state[chat_key] = []
             user_input = st.chat_input(f"Ask about {selected_viz} in {selected_subreddit}")
             if user_input:
-                st.session_state[chat_key].append({"role": "user", "text": user_input})
-                response = get_gemini_response(user_input, viz_context)
-                st.session_state[chat_key].append({"role": "assistant", "text": response})
+                with st.spinner("Getting response from Gemini..."):
+                    st.session_state[chat_key].append({"role": "user", "text": user_input})
+                    response = get_gemini_response(user_input, viz_context)
+                    st.session_state[chat_key].append({"role": "assistant", "text": response})
             for message in st.session_state[chat_key]:
                 with st.chat_message(message["role"]):
                     st.write(message["text"])
