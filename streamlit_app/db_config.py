@@ -2,24 +2,20 @@ import streamlit as st
 import pymysql
 import tempfile
 
-# Load database credentials from Streamlit Secrets
-MYSQL_HOST = st.secrets["MYSQL_HOST"]
-MYSQL_USER = st.secrets["MYSQL_USER"]
-MYSQL_PASSWORD = st.secrets["MYSQL_PASSWORD"]
-MYSQL_DATABASE = st.secrets["MYSQL_DATABASE"]
-MYSQL_CA_CERT = st.secrets["MYSQL_CA_CERT"]  # CA certificate content from secrets
+# Load MySQL credentials from Streamlit secrets
+MYSQL_CONFIG = st.secrets["MYSQL"]
 
-# Store CA Cert as a temporary file
+# Store CA certificate temporarily for secure MySQL connection
 with tempfile.NamedTemporaryFile(delete=False, suffix=".pem") as temp_cert:
-    temp_cert.write(MYSQL_CA_CERT.encode("utf-8"))
-    temp_cert_path = temp_cert.name  # Get the path of the temporary certificate file
+    temp_cert.write(MYSQL_CONFIG["CA_CERT"].encode("utf-8"))
+    temp_cert_path = temp_cert.name  # This is the correct variable name
 
-# Establish MySQL connection with SSL
+# Function to connect to MySQL
 def get_db_connection():
     return pymysql.connect(
-        host=MYSQL_HOST,
-        user=MYSQL_USER,
-        password=MYSQL_PASSWORD,
-        database=MYSQL_DATABASE,
-        ssl_ca=temp_cert_path  # Correct way to use SSL in pymysql
+        host=MYSQL_CONFIG["HOST"],
+        user=MYSQL_CONFIG["USER"],
+        password=MYSQL_CONFIG["PASSWORD"],
+        database=MYSQL_CONFIG["DATABASE"],
+        ssl={"ca": temp_cert_path}  # Corrected CA cert file path
     )
