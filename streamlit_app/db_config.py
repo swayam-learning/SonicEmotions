@@ -1,5 +1,5 @@
+import streamlit as st
 
-MYSQL_HOST = "127.0.0.1"
-MYSQL_USER = "root"
-MYSQL_PASSWORD = "12345"
-MYSQL_DATABASE = "MentalHealthDB"
+MYSQL_HOST = st.secrets["MYSQL_HOST"]
+MYSQL_USER = st.secrets["MYSQL_USER"]
+MYSQL_PASSWORD = st.secrets["MYSQL_PASSWORD"]
