@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from db_config import get_db_connection  # Updated import
+from db_config import get_db_connection
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from textblob import TextBlob
@@ -13,6 +13,7 @@ import streamlit as st
 import requests
 import os
 import praw
+import pymysql.cursors  # Import for DictCursor
 
 # Set NLTK data path for Streamlit Cloud
 nltk_data_path = os.path.join(os.getcwd(), "nltk_data")
@@ -50,7 +51,7 @@ except Exception as e:
 # Create or use existing subreddit database
 @st.cache_resource
 def create_subreddit_db(subreddit):
-    conn = get_db_connection()  # Updated to use get_db_connection
+    conn = get_db_connection()
     if not conn:
         return False
     try:
@@ -108,7 +109,7 @@ def fetch_subreddit_posts(subreddit, days_ago=120):
 # Store posts in the database
 def store_posts(subreddit, posts):
     db_name = f"reddit_{subreddit.replace('/', '_').lower()}"
-    conn = get_db_connection(db_name)  # Updated to use get_db_connection
+    conn = get_db_connection(db_name)
     if not conn:
         return
     try:
@@ -119,6 +120,7 @@ def store_posts(subreddit, posts):
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (post['id'], post['title'], post['body'], post['upvotes'], post['created_at'], post['subreddit']))
         conn.commit()
+        st.write(f"Stored {len(posts)} posts in {db_name}.")
     except pymysql.MySQLError as e:
         st.error(f"Error storing posts: {e}")
     finally:
@@ -129,11 +131,13 @@ def store_posts(subreddit, posts):
 @st.cache_data
 def fetch_posts_from_db(subreddit, days_ago=120):
     db_name = f"reddit_{subreddit.replace('/', '_').lower()}"
-    conn = get_db_connection(db_name)  # Updated to use get_db_connection
+    conn = get_db_connection(db_name)
     if not conn:
+        st.error("Failed to connect to the database.")
         return []
     try:
-        cursor = conn.cursor()
+        # Use DictCursor to get rows as dictionaries
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
         query = """
         SELECT * FROM posts 
         WHERE created_at >= DATE_SUB(NOW(), INTERVAL %s DAY)
@@ -141,6 +145,10 @@ def fetch_posts_from_db(subreddit, days_ago=120):
         """
         cursor.execute(query, (days_ago,))
         posts = cursor.fetchall()
+        if posts:
+            st.write("Sample post from DB:", posts[0])  # Debug output
+        else:
+            st.write(f"No posts found in {db_name} for the last {days_ago} days.")
         return posts
     except pymysql.MySQLError as e:
         st.error(f"MySQL Error: {e}")
@@ -163,7 +171,13 @@ def analyze_sentiment_textblob(text):
 # Time series analysis
 @st.cache_data
 def analyze_post_trends(posts):
+    if not posts:
+        st.warning("No posts available for trend analysis.")
+        return pd.DataFrame()
     df = pd.DataFrame(posts)
+    if 'created_at' not in df.columns:
+        st.error("Data from database is missing 'created_at' column. Check database fetch logic.")
+        return pd.DataFrame()
     df['created_at'] = pd.to_datetime(df['created_at'])
     df['date'] = df['created_at'].dt.date
     daily_counts = df.groupby('date').size().reset_index(name='post_count')
@@ -277,7 +291,7 @@ def main():
     st.title("Subreddit Analysis with Chatbot 🚀")
     st.write("Analyze subreddit posts over the last 120 days!")
 
-    subreddit_options = ['r/anxiety', 'r/depression', 'r/mentalhealth', 'r/suicide','r/stress','/rIndianStockMarket','r/NSEbets','r/wallstreetbets','r/investing']
+    subreddit_options = ['r/anxiety', 'r/depression', 'r/mentalhealth', 'r/suicide', 'r/stress', '/rIndianStockMarket', 'r/NSEbets', 'r/wallstreetbets', 'r/investing']
     selected_subreddit = st.selectbox("Select Subreddit", subreddit_options)
 
     if 'current_subreddit' not in st.session_state or st.session_state['current_subreddit'] != selected_subreddit:
@@ -297,6 +311,9 @@ def main():
 
     with st.spinner("Analyzing data..."):
         trend_data = analyze_post_trends(posts)
+        if trend_data.empty:
+            st.warning("Trend analysis failed due to missing or malformed data.")
+            return
         top_words, word_counts = analyze_common_topics(posts)
         visualizations = generate_visualizations(posts, trend_data, top_words, word_counts)
         stats = get_statistics(posts)
