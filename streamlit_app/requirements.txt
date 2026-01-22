@@ -8,3 +8,5 @@ wordcloud
 streamlit
 requests
 praw
+streamlit==1.28.2
+altair==4.2.2
